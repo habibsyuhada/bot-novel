@@ -1,40 +1,95 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/pages/api-reference/create-next-app).
+# Novel Translation Bot
 
-## Getting Started
+A web application that automates the process of translating novel chapters from English to Indonesian using DeepL and storing the results in Supabase.
 
-First, run the development server:
+## Features
 
-```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
-```
+- Accepts a novel URL as input (currently optimized for NovelBin)
+- Automatically extracts chapter content
+- Translates content from English to Indonesian using DeepL
+- Saves translated content to Supabase
+- Automatically navigates to the next chapter and repeats the process
+- Configurable number of chapters to process
+- Skips chapters that already exist in the database
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+## Prerequisites
 
-You can start editing the page by modifying `pages/index.tsx`. The page auto-updates as you edit the file.
+- Node.js 18+ and npm
+- A Supabase account and project
+- Google Chrome installed on your system
 
-[API routes](https://nextjs.org/docs/pages/building-your-application/routing/api-routes) can be accessed on [http://localhost:3000/api/hello](http://localhost:3000/api/hello). This endpoint can be edited in `pages/api/hello.ts`.
+## Setup
 
-The `pages/api` directory is mapped to `/api/*`. Files in this directory are treated as [API routes](https://nextjs.org/docs/pages/building-your-application/routing/api-routes) instead of React pages.
+1. Clone this repository
+2. Install dependencies:
+   ```
+   npm install
+   ```
+3. Create a `.env.local` file in the root directory with the following variables:
+   ```
+   NEXT_PUBLIC_SUPABASE_URL=your_supabase_url
+   NEXT_PUBLIC_SUPABASE_ANON_KEY=your_supabase_anon_key
+   MAX_CHAPTERS=100
+   ```
+4. Create the required tables in your Supabase project with the following structure:
+   ```sql
+   -- Novel table
+   CREATE TABLE public.novel (
+     id serial4 NOT NULL,
+     "name" varchar NULL,
+     author varchar NULL,
+     genre varchar NULL,
+     status int4 NULL,
+     publishers varchar NULL,
+     tag text NULL,
+     "year" int4 NULL,
+     CONSTRAINT novel_pkey PRIMARY KEY (id)
+   );
 
-This project uses [`next/font`](https://nextjs.org/docs/pages/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+   -- Novel chapter table
+   CREATE TABLE public.novel_chapter (
+     id serial4 NOT NULL,
+     novel int4 NULL,
+     chapter int4 NULL,
+     title varchar NULL,
+     "text" text NULL,
+     CONSTRAINT novel_chapter_pkey PRIMARY KEY (id),
+     CONSTRAINT novel_chapter_novel_fkey FOREIGN KEY (novel) REFERENCES public.novel(id)
+   );
+   ```
 
-## Learn More
+## Usage
 
-To learn more about Next.js, take a look at the following resources:
+1. First, manually add a novel entry to the `novel` table in your Supabase project and note the ID
+2. Start the development server:
+   ```
+   npm run dev
+   ```
+3. Open your browser and navigate to `http://localhost:3000`
+4. Enter the Novel ID from your database
+5. Enter the URL of the novel chapter you want to start translating
+6. Set the maximum number of chapters to process
+7. Click "Start Translation"
+8. The application will open Chrome, navigate to the novel page, extract content, translate it using DeepL, and save it to Supabase
+9. The process will continue automatically until all chapters are processed or the maximum number is reached
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn-pages-router) - an interactive Next.js tutorial.
+## Configuration
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+- You can adjust the Chrome path in `src/pages/api/bot.ts` if your Chrome installation is in a different location
+- The user data directory is set to the default Chrome profile location, but you can change it if needed
 
-## Deploy on Vercel
+## Notes
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+- The application uses Puppeteer to control Chrome
+- The translation is done using DeepL's web interface
+- The application is designed to work with NovelBin, but can be adapted for other novel sites by modifying the selectors
+- The application will automatically find and click the "Next Chapter" button to navigate to the next chapter
+- You must first manually create a novel entry in the `novel` table before using this tool to add chapters
+- The application will skip chapters that already exist in the database to avoid duplicates
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/pages/building-your-application/deploying) for more details.
+## Troubleshooting
+
+- If the application fails to extract content, check if the selectors in the code match the structure of the novel site
+- If the translation fails, check if DeepL's interface has changed and update the selectors accordingly
+- If the application fails to save to Supabase, check your Supabase credentials and table structure
+- If you get a "Novel not found" error, make sure you've created an entry in the `novel` table with the ID you're providing
