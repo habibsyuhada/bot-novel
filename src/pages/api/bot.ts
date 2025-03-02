@@ -76,7 +76,7 @@ export default async function handler(
 
     // Launch browser dengan menggunakan Chrome yang sudah terinstal
     const browser = await puppeteer.launch({
-      headless: false,
+      // headless: false,
       executablePath: chromePath,
       userDataDir: userDataDir,
       args: [
@@ -98,9 +98,9 @@ export default async function handler(
       // Open novel page
       const novelPage = await browser.newPage();
       await novelPage.goto(currentUrl, {  
-        waitUntil: 'networkidle2',  
-      });  
-      
+			waitUntil: 'networkidle2',  
+		});  
+		
       // Extract chapter title
       const chapterTitle = await novelPage.evaluate(() => {
         const titleElement = document.querySelector('.chr-title');
@@ -109,7 +109,7 @@ export default async function handler(
       
       // Extract chapter content
       const text = await novelPage.evaluate(() => {  
-        const contentElement = document.querySelector('#chr-content');
+				const contentElement = document.querySelector('#chr-content');  
         
         if (!contentElement) return '';
         
@@ -157,7 +157,7 @@ export default async function handler(
       }
       
       // Log the first 200 characters of the cleaned content for debugging
-      console.log('Cleaned content (first 200 chars):', text.substring(0, 200));
+      // console.log('Cleaned content (first 200 chars):', text.substring(0, 200));
       
       // Find the next chapter link before closing the current page
       const nextChapterUrl = await novelPage.evaluate(() => {
@@ -179,27 +179,27 @@ export default async function handler(
       // Open DeepL in a new tab
       const deeplPage = await browser.newPage();
       await deeplPage.goto('https://www.deepl.com/en/translator', {  
-        waitUntil: 'networkidle2',  
-      });  
+				waitUntil: 'networkidle2',  
+		});  
 
-      // Try to paste the text first, if it fails, fall back to typing
-      try {
+		// Try to paste the text first, if it fails, fall back to typing
+		try {
         await deeplPage.evaluate((text) => {
-          const element = document.querySelector('.min-h-0 > div:nth-child(1)');
-          if (element) {
-            element.textContent = text;
-          }
-        }, text);
-      } catch (error) {
-        console.log('Paste failed, falling back to typing:', error);
+				const element = document.querySelector('.min-h-0 > div:nth-child(1)');
+				if (element) {
+					element.textContent = text;
+				}
+			}, text);
+		} catch (error) {
+			console.log('Paste failed, falling back to typing:', error);
         await deeplPage.type('.min-h-0 > div:nth-child(1)', text);
-      }
+		}
       await deeplPage.type('.min-h-0 > div:nth-child(1)', " ");
 
       await deeplPage.waitForSelector('.hidden > div:nth-child(4) .Icon');
       await deeplPage.click('.hidden > div:nth-child(4) .Icon');
-      
-      // Wait for translation to complete
+  	
+  	// Wait for translation to complete
       await deeplPage.waitForSelector('d-textarea[aria-labelledby="translation-target-heading"]', { timeout: 10000 });
       
       // Wait for 2 seconds before getting the translation
@@ -230,7 +230,7 @@ export default async function handler(
       // Uncomment the line below to use this option
       // cleanedTranslatedText = cleanedTranslatedText.split('\n').join(' ');
       
-      console.log('Translated text (cleaned):', cleanedTranslatedText.substring(0, 200) + '...');
+      // console.log('Translated text (cleaned):', cleanedTranslatedText.substring(0, 200) + '...');
 
       // Extract chapter number from title or URL if possible
       let chapterNumber = processedChapters + 1; // Default to the processed count
@@ -309,14 +309,14 @@ export default async function handler(
 
     await browser.close();
 
-    return res.status(200).json({
-      success: true,
+		return res.status(200).json({
+			success: true,
       message: `Successfully processed ${processedChapters} chapters`,
-      data: {
+			data: {
         processedChapters,
         results
-      }
-    });
+			}
+		});
 
   } catch (error) {
     console.error('Puppeteer error:', error);
