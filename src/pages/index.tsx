@@ -1,7 +1,13 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import Head from 'next/head';
 
 // Define types for API response
+type Novel = {
+  id: number;
+  name: string;
+  last_url_translated: string | null;
+};
+
 type ChapterResult = {
   chapter: number;
   title: string;
@@ -17,6 +23,14 @@ type BotResponse = {
   data?: {
     processedChapters: number;
     results: ChapterResult[];
+    timing: {
+      totalHours: number;
+      totalMinutes: number;
+    };
+    summary: {
+      successfulChapters: number;
+      skippedChapters: number;
+    };
   };
   error?: string;
 };
@@ -28,6 +42,29 @@ export default function Home() {
   const [isLoading, setIsLoading] = useState(false);
   const [result, setResult] = useState<BotResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [novels, setNovels] = useState<Novel[]>([]);
+  const [isLoadingNovels, setIsLoadingNovels] = useState(true);
+
+  useEffect(() => {
+    const fetchNovels = async () => {
+      try {
+        const response = await fetch('/api/novels');
+        const data = await response.json();
+        
+        if (data.success && data.data) {
+          setNovels(data.data);
+        } else {
+          setError('Failed to fetch novels: ' + (data.error || 'Unknown error'));
+        }
+      } catch (err) {
+        setError('Failed to fetch novels: ' + (err instanceof Error ? err.message : String(err)));
+      } finally {
+        setIsLoadingNovels(false);
+      }
+    };
+
+    fetchNovels();
+  }, []);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -76,17 +113,32 @@ export default function Home() {
             <div className="divide-y divide-gray-200">
               <form onSubmit={handleSubmit} className="py-8 space-y-4 text-base leading-6 text-gray-700 sm:text-lg sm:leading-7">
                 <div className="relative">
-                  <label htmlFor="novelId" className="text-gray-600">Novel ID</label>
-                  <input
+                  <label htmlFor="novelId" className="text-gray-600">Select Novel</label>
+                  <select
                     id="novelId"
-                    type="number"
                     value={novelId}
-                    onChange={(e) => setNovelId(e.target.value)}
-                    placeholder="Enter the novel ID from your database"
+                    onChange={(e) => {
+                      setNovelId(e.target.value);
+                      // Find the selected novel and set its last_url_translated as the URL
+                      const selectedNovel = novels.find(n => n.id.toString() === e.target.value);
+                      if (selectedNovel?.last_url_translated) {
+                        setUrl(selectedNovel.last_url_translated);
+                      }
+                    }}
                     required
+                    disabled={isLoadingNovels}
                     className="w-full px-4 py-2 mt-1 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  />
-                  <p className="mt-1 text-xs text-gray-500">This should match an existing ID in the novel table</p>
+                  >
+                    <option value="">Select a novel...</option>
+                    {novels.map((novel) => (
+                      <option key={novel.id} value={novel.id}>
+                        {novel.name} (ID: {novel.id})
+                      </option>
+                    ))}
+                  </select>
+                  {isLoadingNovels && (
+                    <p className="mt-1 text-xs text-gray-500">Loading novels...</p>
+                  )}
                 </div>
                 
                 <div className="relative">

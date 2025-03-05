@@ -67,6 +67,9 @@ export default async function handler(
                            parseInt(process.env.MAX_CHAPTERS || '100', 10);
   
   try {
+    // Start timing
+    const startTime = Date.now();
+    
     // Path ke Chrome yang sudah terinstal (sesuai dengan lokasi Chrome di komputer pengguna)
     const chromePath = 'C:\\Program Files (x86)\\Google\\Chrome\\Application\\chrome.exe';
     
@@ -304,6 +307,16 @@ export default async function handler(
             url: novelPage.url(),
             saved: true
           });
+
+          // Update the last_url_translated in the novel table
+          const { error: updateError } = await supabase
+            .from('novel')
+            .update({ last_url_translated: novelPage.url() })
+            .eq('id', novelIdNum);
+
+          if (updateError) {
+            console.error('Error updating last_url_translated:', updateError);
+          }
         }
       }
 
@@ -320,12 +333,30 @@ export default async function handler(
 
     await browser.close();
 
+    // Calculate timing
+    const endTime = Date.now();
+    const totalTimeMs = endTime - startTime;
+    const totalHours = Math.floor(totalTimeMs / (1000 * 60 * 60));
+    const totalMinutes = Math.floor((totalTimeMs % (1000 * 60 * 60)) / (1000 * 60));
+
+    // Calculate summary
+    const successfulChapters = results.filter(r => r.saved && !r.skipped).length;
+    const skippedChapters = results.filter(r => r.skipped).length;
+
 		return res.status(200).json({
 			success: true,
       message: `Successfully processed ${processedChapters} chapters`,
 			data: {
         processedChapters,
-        results
+        results,
+        timing: {
+          totalHours,
+          totalMinutes
+        },
+        summary: {
+          successfulChapters,
+          skippedChapters
+        }
 			}
 		});
 
