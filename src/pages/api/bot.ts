@@ -202,17 +202,28 @@ export default async function handler(
   	// Wait for translation to complete
       await deeplPage.waitForSelector('d-textarea[aria-labelledby="translation-target-heading"]', { timeout: 10000 });
       
-      // Wait for 2 seconds before getting the translation
-      await new Promise(resolve => setTimeout(resolve, 3000));
+      // Try to get translation up to 3 times if it's empty
+      let translatedText = '';
+      let attempts = 0;
+      const maxAttempts = 3;
       
-      // Get the translated text
-      const translatedText = await deeplPage.evaluate(() => {
-        const textElement = document.querySelector('d-textarea[aria-labelledby="translation-target-heading"]');
-        return textElement ? (textElement as HTMLElement).innerText?.trim() || '' : '';
-      });
+      while (translatedText === '' && attempts < maxAttempts) {
+        // Wait for 2 seconds before getting the translation
+        await new Promise(resolve => setTimeout(resolve, 2000));
+        
+        translatedText = await deeplPage.evaluate(() => {
+          const textElement = document.querySelector('d-textarea[aria-labelledby="translation-target-heading"]');
+          return textElement ? (textElement as HTMLElement).innerText?.trim() || '' : '';
+        });
+        
+        attempts++;
+        // if (translatedText === '' && attempts < maxAttempts) {
+        //   console.log(`Translation attempt ${attempts} failed, trying again...`);
+        // }
+      }
 
       // Clean up excessive newlines in the translated text
-      let cleanedTranslatedText = translatedText
+      const cleanedTranslatedText = translatedText
         .replace(/\n{2,}/g, '\n') // Replace 2 or more consecutive newlines with 1
         .replace(/^\n+|\n+$/g, '') // Remove leading and trailing newlines
         .split('\n')
