@@ -109,7 +109,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse<
         if (!contentElement) return "";
 
         // Check for premium content element
-        const premiumElement = document.querySelector(".unlock-buttons");
+        const premiumElement = document.querySelector("#btn-buy-chapter");
         if (premiumElement) {
           return "PREMIUM_CONTENT";
         }
@@ -259,8 +259,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse<
       // Extract chapter number from title or URL if possible
       let chapterNumber = processedChapters + 1; // Default to the processed count
 
-      // Try to extract chapter number from title (e.g., "Chapter 123: Title")
-      const chapterMatch = chapterTitle?.match(/chapter\s+(\d+)/i);
+      // Try to extract chapter number from title (e.g., "Chapter 123: Title" or "Chapter123: Title")
+      const chapterMatch = chapterTitle?.match(/chapter\s*(\d+)/i);
       if (chapterMatch && chapterMatch[1]) {
         chapterNumber = parseInt(chapterMatch[1], 10);
       }
@@ -338,6 +338,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse<
     const totalTimeMs = endTime - startTime;
     const totalHours = Math.floor(totalTimeMs / (1000 * 60 * 60));
     const totalMinutes = Math.floor((totalTimeMs % (1000 * 60 * 60)) / (1000 * 60));
+    const totalSeconds = Math.floor((totalTimeMs % (1000 * 60)) / 1000);
 
     // Calculate summary
     const successfulChapters = results.filter((r) => r.saved && !r.skipped).length;
@@ -352,6 +353,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse<
         timing: {
           totalHours,
           totalMinutes,
+          totalSeconds,
         },
         summary: {
           successfulChapters,

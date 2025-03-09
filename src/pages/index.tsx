@@ -26,6 +26,7 @@ type BotResponse = {
     timing: {
       totalHours: number;
       totalMinutes: number;
+      totalSeconds: number;
     };
     summary: {
       successfulChapters: number;
@@ -190,6 +191,31 @@ export default function Home() {
                   <div className="mt-2 p-4 bg-gray-50 rounded-md">
                     <p className="text-green-600 font-medium">{result.message}</p>
                     <p className="mt-2">Processed chapters: {result.data?.processedChapters}</p>
+                    
+                    {result.data?.timing && (
+                      <div className="mt-4">
+                        <h3 className="text-lg font-medium text-gray-700">Processing Time:</h3>
+                        <p className="mt-1">
+                          {result.data.timing.totalHours > 0 && `${result.data.timing.totalHours} hours `}
+                          {result.data.timing.totalMinutes > 0 && `${result.data.timing.totalMinutes} minutes `}
+                          {result.data.timing.totalSeconds} seconds
+                        </p>
+                      </div>
+                    )}
+
+                    {result.data?.summary && (
+                      <div className="mt-4">
+                        <h3 className="text-lg font-medium text-gray-700">Summary:</h3>
+                        <div className="mt-1 space-y-1">
+                          <p className="text-green-600">
+                            Successfully translated: {result.data.summary.successfulChapters} chapters
+                          </p>
+                          <p className="text-yellow-600">
+                            Skipped: {result.data.summary.skippedChapters} chapters
+                          </p>
+                        </div>
+                      </div>
+                    )}
                     
                     {result.data?.results && result.data.results.length > 0 && (
                       <div className="mt-4">
