@@ -217,7 +217,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse<
       await deeplPage.click(".hidden > div:nth-child(4) .Icon");
 
       // Wait for translation to complete
-      await deeplPage.waitForSelector('d-textarea[aria-labelledby="translation-target-heading"]', { timeout: 10000 });
+      await deeplPage.waitForSelector('d-textarea[aria-labelledby="translation-target-heading"]', { timeout: 2000 });
 
       // Try to get translation up to 3 times if it's empty
       let translatedText = "";
@@ -237,6 +237,12 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse<
         // if (translatedText === '' && attempts < maxAttempts) {
         //   console.log(`Translation attempt ${attempts} failed, trying again...`);
         // }
+      }
+
+      if (translatedText === "") {
+        console.log("Translation failed. Skipping chapter.");
+        console.log("translatedText", translatedText);
+        console.log("text", text);
       }
 
       // Clean up excessive newlines in the translated text
