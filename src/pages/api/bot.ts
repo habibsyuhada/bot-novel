@@ -125,6 +125,10 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse<
         const emptyDivs = contentClone.querySelectorAll("div:empty");
         emptyDivs.forEach((div: Element) => div.remove());
 
+        // Remove unlock-buttons divs
+        const unlockButtons = contentClone.querySelectorAll('.unlock-buttons');
+        unlockButtons.forEach((div: Element) => div.remove());
+
         // Replace <p> tags with double newlines for proper paragraph separation
         const paragraphs: string[] = [];
         const pElements = contentClone.querySelectorAll("p");
