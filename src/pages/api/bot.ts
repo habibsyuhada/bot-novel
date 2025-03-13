@@ -193,6 +193,34 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse<
       // Convert relative URL to absolute if needed
       currentUrl = nextChapterUrl.startsWith("http") ? nextChapterUrl : new URL(nextChapterUrl, currentUrl).toString();
 
+			// Extract chapter number from title or URL if possible
+      let chapterNumber = processedChapters + 1; // Default to the processed count
+
+      // Try to extract chapter number from title (e.g., "Chapter 123: Title" or "Chapter123: Title")
+      const chapterMatch = chapterTitle?.match(/chapter\s*(\d+)/i);
+      if (chapterMatch && chapterMatch[1]) {
+        chapterNumber = parseInt(chapterMatch[1], 10);
+      }
+
+      // Check if this chapter already exists in the database
+      const { data: existingChapter, error: checkError } = await supabase.from("novel_chapter").select("id").eq("novel", novelIdNum).eq("chapter", chapterNumber).maybeSingle();
+
+      if (checkError) {
+        console.error("Error checking for existing chapter:", checkError);
+      }
+
+      if (existingChapter) {
+        console.log(`Chapter ${chapterNumber} already exists in the database. Skipping.`);
+        results.push({
+          chapter: chapterNumber,
+          title: chapterTitle,
+          url: currentUrl,
+          saved: false,
+          skipped: true,
+        });
+				continue;
+      }
+
       // Open DeepL in a new tab
       const deeplPage = await browser.newPage();
       await deeplPage.goto("https://www.deepl.com/en/translator", {
@@ -265,22 +293,6 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse<
       // cleanedTranslatedText = cleanedTranslatedText.split('\n').join(' ');
 
       // console.log('Translated text (cleaned):', cleanedTranslatedText.substring(0, 200) + '...');
-
-      // Extract chapter number from title or URL if possible
-      let chapterNumber = processedChapters + 1; // Default to the processed count
-
-      // Try to extract chapter number from title (e.g., "Chapter 123: Title" or "Chapter123: Title")
-      const chapterMatch = chapterTitle?.match(/chapter\s*(\d+)/i);
-      if (chapterMatch && chapterMatch[1]) {
-        chapterNumber = parseInt(chapterMatch[1], 10);
-      }
-
-      // Check if this chapter already exists in the database
-      const { data: existingChapter, error: checkError } = await supabase.from("novel_chapter").select("id").eq("novel", novelIdNum).eq("chapter", chapterNumber).maybeSingle();
-
-      if (checkError) {
-        console.error("Error checking for existing chapter:", checkError);
-      }
 
       // Skip if chapter already exists
       if (existingChapter) {
