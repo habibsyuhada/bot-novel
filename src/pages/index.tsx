@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import Head from 'next/head';
+import Link from 'next/link';
 
 // Define types for API response
 type Novel = {
@@ -109,6 +110,9 @@ export default function Home() {
             <div className="text-center">
               <h1 className="text-3xl font-semibold text-gray-900">Novel Translation Bot</h1>
               <p className="mt-2 text-gray-600">Enter a novel URL to translate chapters to Indonesian</p>
+              <Link href="/batch" className="text-blue-500 hover:text-blue-600 mt-2 inline-block">
+                Switch to Batch Mode
+              </Link>
             </div>
 
             <div className="divide-y divide-gray-200">
