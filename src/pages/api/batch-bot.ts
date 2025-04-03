@@ -258,7 +258,7 @@ export default async function handler(
 					let attempts = 0;
 					const maxAttempts = 3;
 		
-					while (translatedText === "" && attempts < maxAttempts) {
+					while ((translatedText === "" || translatedText.includes("[...]")) && attempts < maxAttempts) {
 						// Wait for 2 seconds before getting the translation
 						await new Promise((resolve) => setTimeout(resolve, 2000));
 		
@@ -268,15 +268,15 @@ export default async function handler(
 						});
 		
 						attempts++;
-						if (translatedText === '' && attempts < maxAttempts) {
+						if ((translatedText === "" || translatedText.includes("[...]")) && attempts < maxAttempts) {
 						  console.log(`Translation attempt ${attempts} failed, trying again...`);
 						}
 					}
 		
-					if (translatedText === "") {
+					if (translatedText === "" || translatedText.includes("[...]")) {
 						console.log("Translation failed. Skipping chapter.");
-						console.log("translatedText", translatedText);
-						console.log("text", text);
+						// console.log("translatedText", translatedText);
+						// console.log("text", text);
 					}
 		
 					// Clean up excessive newlines in the translated text
