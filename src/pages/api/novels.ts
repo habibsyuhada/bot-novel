@@ -26,7 +26,7 @@ export default async function handler(
     const { data, error } = await supabase
       .from('novel')
       .select('id, name, last_url_translated')
-      .order('name');
+      .order('id');
 
     if (error) {
       throw error;

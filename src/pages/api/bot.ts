@@ -334,11 +334,16 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse<
           });
 
           // Update the last_url_translated in the novel table
-          const { error: updateError } = await supabase.from("novel").update({ last_url_translated: currentUrl }).eq("id", novelIdNum);
+					if(!currentUrl.includes("/null")){
+						const { error: updateError } = await supabase.from("novel").update({ last_url_translated: currentUrl }).eq("id", novelIdNum);
 
-          if (updateError) {
-            console.error("Error updating last_url_translated:", updateError);
-          }
+						if (updateError) {
+							console.error("Error updating last_url_translated:", updateError);
+						}
+					}
+					else{
+						break;
+					}
         }
       }
 

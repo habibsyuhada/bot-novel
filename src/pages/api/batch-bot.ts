@@ -50,6 +50,7 @@ export default async function handler(
 
     // Launch browser sekali untuk semua novel
     const browser = await puppeteer.launch({
+      // headless: false,
       executablePath: chromePath,
       userDataDir: userDataDir,
       args: [
@@ -80,7 +81,7 @@ export default async function handler(
           continue;
         }
 
-        let currentUrl = novel.last_url_translated || novel.start_url;
+        let currentUrl = novel.last_url_translated;
         if (!currentUrl) {
           results.push({
             novelId: novel.id,
@@ -95,132 +96,270 @@ export default async function handler(
 
         // Proses chapter untuk novel ini
         while (processedChapters < chaptersToProcess) {
-          const novelPage = await browser.newPage();
-          await novelPage.goto(currentUrl, { waitUntil: "networkidle2" });
-
-          // Extract chapter title
-          const chapterTitle = await novelPage.evaluate(() => {
-            const titleElement = document.querySelector(".chr-title");
-            return titleElement ? titleElement.textContent?.trim() : "";
-          });
-
-          // Extract chapter content
-          const text = await novelPage.evaluate(() => {
-            const contentElement = document.querySelector("#chr-content");
-            if (!contentElement) return "";
-
-            const premiumElement = document.querySelector("#btn-buy-chapter");
-            if (premiumElement) return "PREMIUM_CONTENT";
-
-            const contentClone = contentElement.cloneNode(true) as HTMLElement;
-            const adDivs = contentClone.querySelectorAll('div[id^="pf-"]');
-            adDivs.forEach((div: Element) => div.remove());
-
-            const emptyDivs = contentClone.querySelectorAll("div:empty");
-            emptyDivs.forEach((div: Element) => div.remove());
-
-            const unlockButtons = contentClone.querySelectorAll('.unlock-buttons');
-            unlockButtons.forEach((div: Element) => div.remove());
-
-            const paragraphs: string[] = [];
-            const pElements = contentClone.querySelectorAll("p");
-            pElements.forEach((p: Element) => {
-              let text = p.textContent?.trim() || "";
-              text = text.replace("@@novelbin@@", "");
-              if (text) paragraphs.push(text);
-            });
-
-            return paragraphs.join("\n\n");
-          });
-
-          if (!text || text === "PREMIUM_CONTENT") {
-            await novelPage.close();
+					console.log(`Processing chapter ${processedChapters + 1}/${chaptersToProcess}: ${currentUrl}`);
+		
+					// Open novel page
+					const novelPage = await browser.newPage();
+					await novelPage.goto(currentUrl, {
+						waitUntil: "networkidle2",
+					});
+		
+					// Extract chapter title
+					const chapterTitle = await novelPage.evaluate(() => {
+						const titleElement = document.querySelector(".chr-title");
+						return titleElement ? titleElement.textContent?.trim() : "";
+					});
+		
+					// Extract chapter content
+					const text = await novelPage.evaluate(() => {
+						const contentElement = document.querySelector("#chr-content");
+		
+						if (!contentElement) return "";
+		
+						// Check for premium content element
+						const premiumElement = document.querySelector("#btn-buy-chapter");
+						if (premiumElement) {
+							return "PREMIUM_CONTENT";
+						}
+		
+						// Clone the content element to avoid modifying the original
+						const contentClone = contentElement.cloneNode(true) as HTMLElement;
+		
+						// Remove all advertisement divs (those with script tags or pubfuturetag)
+						const adDivs = contentClone.querySelectorAll('div[id^="pf-"]');
+						adDivs.forEach((div: Element) => div.remove());
+		
+						// Remove any empty divs
+						const emptyDivs = contentClone.querySelectorAll("div:empty");
+						emptyDivs.forEach((div: Element) => div.remove());
+		
+						// Remove unlock-buttons divs
+						const unlockButtons = contentClone.querySelectorAll('.unlock-buttons');
+						unlockButtons.forEach((div: Element) => div.remove());
+		
+						// Replace <p> tags with double newlines for proper paragraph separation
+						const paragraphs: string[] = [];
+						const pElements = contentClone.querySelectorAll("p");
+						pElements.forEach((p: Element) => {
+							let text = p.textContent?.trim() || "";
+		
+							// Remove the novelbin marker if present
+							text = text.replace("@@novelbin@@", "");
+		
+							if (text) paragraphs.push(text);
+						});
+		
+						// Get the chapter title if it exists
+						const titleElement = contentClone.querySelector("h4");
+						const title = titleElement ? titleElement.textContent?.trim() : "";
+		
+						// Combine title and paragraphs with proper spacing
+						let finalContent = "";
+						if (title) {
+							finalContent = title + "\n\n";
+						}
+		
+						finalContent += paragraphs.join("\n\n");
+		
+						return finalContent;
+					});
+		
+					if (!text) {
+						console.log("No content found on the page. Skipping chapter.");
+						break;
+					}
+		
+					// Check if we hit premium content
+					if (text === "PREMIUM_CONTENT") {
+						console.log("Premium content detected. Stopping translation process.");
+						results.push({
+							novelId: novel.id,
+							chaptersProcessed: processedChapters + 1,
+							title: chapterTitle,
+							error: "Premium content detected",
+						});
+						await novelPage.close();
             break;
-          }
-
-          // Find next chapter URL
-          const nextChapterUrl = await novelPage.evaluate(() => {
-            const nextButton = document.querySelector("#next_chap");
-            return nextButton ? nextButton.getAttribute("href") : null;
-          });
-
-          // Extract chapter number
-          let chapterNumber = processedChapters + 1;
-          const chapterMatch = chapterTitle?.match(/chapter\s*(\d+)/i);
-          if (chapterMatch && chapterMatch[1]) {
-            chapterNumber = parseInt(chapterMatch[1], 10);
-          }
-
-          // Check if chapter exists
-          const { data: existingChapter } = await supabase
-            .from("novel_chapter")
-            .select("id")
-            .eq("novel", novel.id)
-            .eq("chapter", chapterNumber)
-            .maybeSingle();
-
-          if (!existingChapter) {
-            // Translate content using DeepL
-            const deeplPage = await browser.newPage();
-            await deeplPage.goto("https://www.deepl.com/en/translator", {
-              waitUntil: "networkidle2",
-            });
-
-            await deeplPage.evaluate((text) => {
-              const element = document.querySelector(".min-h-0 > div:nth-child(1)");
-              if (element) {
-                element.textContent = text;
-              }
-            }, text);
-
-            await deeplPage.type(".min-h-0 > div:nth-child(1)", " ");
-            await deeplPage.waitForSelector(".hidden > div:nth-child(4) .Icon");
-            await deeplPage.click(".hidden > div:nth-child(4) .Icon");
-
-            await deeplPage.waitForSelector('d-textarea[aria-labelledby="translation-target-heading"]', { timeout: 2000 });
-            await new Promise((resolve) => setTimeout(resolve, 2000));
-
-            const translatedText = await deeplPage.evaluate(() => {
-              const textElement = document.querySelector('d-textarea[aria-labelledby="translation-target-heading"]');
-              return textElement ? (textElement as HTMLElement).innerText?.trim() || "" : "";
-            });
-
-            if (translatedText) {
-              // Save translated chapter
-              await supabase.from("novel_chapter").insert([
-                {
-                  novel: novel.id,
-                  chapter: chapterNumber,
-                  title: chapterTitle,
-                  text: translatedText,
-                },
-              ]);
-            }
-
-            await deeplPage.close();
-          }
-
-          if (!nextChapterUrl) {
-            await novelPage.close();
-            break;
-          }
-
-          currentUrl = nextChapterUrl.startsWith("http")
-            ? nextChapterUrl
-            : new URL(nextChapterUrl, currentUrl).toString();
-
-          await novelPage.close();
-          processedChapters++;
-
-          // Update last_url_translated
-          await supabase
-            .from("novel")
-            .update({ last_url_translated: currentUrl })
-            .eq("id", novel.id);
-
-          // Add delay between chapters
-          await new Promise((resolve) => setTimeout(resolve, 1000));
-        }
+					}
+		
+					// Log the first 200 characters of the cleaned content for debugging
+					// console.log('Cleaned content (first 200 chars):', text.substring(0, 200));
+		
+					// Find the next chapter link before closing the current page
+					const nextChapterUrl = await novelPage.evaluate(() => {
+						const nextButton = document.querySelector("#next_chap");
+						return nextButton ? nextButton.getAttribute("href") : null;
+					});
+		
+					if (!nextChapterUrl) {
+						console.log("No next chapter link found. Ending process.");
+						await novelPage.close();
+						break;
+					}
+		
+					// Convert relative URL to absolute if needed
+					currentUrl = nextChapterUrl.startsWith("http") ? nextChapterUrl : new URL(nextChapterUrl, currentUrl).toString();
+		
+					// Extract chapter number from title or URL if possible
+					let chapterNumber = processedChapters + 1; // Default to the processed count
+		
+					// Try to extract chapter number from title (e.g., "Chapter 123: Title" or "Chapter123: Title")
+					const chapterMatch = chapterTitle?.match(/chapter\s*(\d+)/i);
+					if (chapterMatch && chapterMatch[1]) {
+						chapterNumber = parseInt(chapterMatch[1], 10);
+					}
+		
+					// Check if this chapter already exists in the database
+					const { data: existingChapter, error: checkError } = await supabase.from("novel_chapter").select("id").eq("novel", novelId).eq("chapter", chapterNumber).maybeSingle();
+		
+					if (checkError) {
+						console.error("Error checking for existing chapter:", checkError);
+					}
+		
+					if (existingChapter) {
+						console.log(`Chapter ${chapterNumber} already exists in the database. Skipping.`);
+						results.push({
+							novelId: novel.id,
+							chaptersProcessed: chapterNumber,
+							novelName: novel.name,
+							error: "Chapter already exists",
+						});
+						continue;
+					}
+		
+					// Open DeepL in a new tab
+					const deeplPage = await browser.newPage();
+					await deeplPage.goto("https://www.deepl.com/en/translator", {
+						waitUntil: "networkidle2",
+					});
+		
+					// Try to paste the text first, if it fails, fall back to typing
+					try {
+						await deeplPage.evaluate((text) => {
+							const element = document.querySelector(".min-h-0 > div:nth-child(1)");
+							if (element) {
+								element.textContent = text;
+							}
+						}, text);
+					} catch (error) {
+						console.log("Paste failed, falling back to typing:", error);
+						await deeplPage.type(".min-h-0 > div:nth-child(1)", text);
+					}
+					await deeplPage.type(".min-h-0 > div:nth-child(1)", " ");
+		
+					await deeplPage.waitForSelector(".hidden > div:nth-child(4) .Icon");
+					await deeplPage.click(".hidden > div:nth-child(4) .Icon");
+		
+					// Wait for translation to complete
+					await deeplPage.waitForSelector('d-textarea[aria-labelledby="translation-target-heading"]', { timeout: 2000 });
+		
+					// Try to get translation up to 3 times if it's empty
+					let translatedText = "";
+					let attempts = 0;
+					const maxAttempts = 3;
+		
+					while (translatedText === "" && attempts < maxAttempts) {
+						// Wait for 2 seconds before getting the translation
+						await new Promise((resolve) => setTimeout(resolve, 2000));
+		
+						translatedText = await deeplPage.evaluate(() => {
+							const textElement = document.querySelector('d-textarea[aria-labelledby="translation-target-heading"]');
+							return textElement ? (textElement as HTMLElement).innerText?.trim() || "" : "";
+						});
+		
+						attempts++;
+						if (translatedText === '' && attempts < maxAttempts) {
+						  console.log(`Translation attempt ${attempts} failed, trying again...`);
+						}
+					}
+		
+					if (translatedText === "") {
+						console.log("Translation failed. Skipping chapter.");
+						console.log("translatedText", translatedText);
+						console.log("text", text);
+					}
+		
+					// Clean up excessive newlines in the translated text
+					const cleanedTranslatedText = translatedText
+						.replace(/\n{2,}/g, "\n") // Replace 2 or more consecutive newlines with 1
+						.replace(/^\n+|\n+$/g, "") // Remove leading and trailing newlines
+						.split("\n")
+						.map((line) => line.trim())
+						.filter((line) => line.length > 0) // Remove empty lines
+						.join("\n");
+		
+					// Option 1: Keep as is with single newlines
+		
+					// Option 2: Add paragraph spacing for better readability
+					// Uncomment the line below to use this option
+					// cleanedTranslatedText = cleanedTranslatedText.split('\n').join('\n\n');
+		
+					// Option 3: Format as a single paragraph with no newlines
+					// Uncomment the line below to use this option
+					// cleanedTranslatedText = cleanedTranslatedText.split('\n').join(' ');
+		
+					// console.log('Translated text (cleaned):', cleanedTranslatedText.substring(0, 200) + '...');
+		
+					// Skip if chapter already exists
+					if (existingChapter) {
+						console.log(`Chapter ${chapterNumber} already exists in the database. Skipping.`);
+						results.push({
+							novelId: novel.id,
+							novelName: novel.name,
+							chaptersProcessed: chapterNumber,
+							error: "Chapter already exists",
+						});
+					} else {
+						// Save to Supabase using the new schema
+						const { error } = await supabase.from("novel_chapter").insert([
+							{
+								novel: novelId,
+								chapter: chapterNumber,
+								title: chapterTitle,
+								text: cleanedTranslatedText,
+							},
+						]);
+		
+						if (error) {
+							console.error("Error saving to Supabase:", error);
+							results.push({
+								novelId: novel.id,
+								novelName: novel.name,
+								chaptersProcessed: chapterNumber,
+								error: error.message,
+							});
+						} else {
+							console.log("Successfully saved chapter to Supabase");
+							results.push({
+								novelId: novel.id,
+								novelName: novel.name,
+								chaptersProcessed: chapterNumber,
+							});
+		
+							// Update the last_url_translated in the novel table
+							if(!currentUrl.includes("/null")){
+								const { error: updateError } = await supabase.from("novel").update({ last_url_translated: currentUrl }).eq("id", novelId);
+			
+								if (updateError) {
+									console.error("Error updating last_url_translated:", updateError);
+								}
+							}
+							else{
+								break;
+							}
+						}
+					}
+		
+					// Close both pages
+					await novelPage.close();
+					await deeplPage.close();
+		
+					// Increment counter
+					processedChapters++;
+		
+					// Add a small delay between chapters to avoid rate limiting
+					await new Promise((resolve) => setTimeout(resolve, 1000));
+				}
 
         results.push({
           novelId: novel.id,
