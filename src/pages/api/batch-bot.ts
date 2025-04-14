@@ -175,7 +175,7 @@ export default async function handler(
 						results.push({
 							novelId: novel.id,
 							chaptersProcessed: processedChapters + 1,
-							title: chapterTitle,
+							novelName: novel.name,
 							error: "Premium content detected",
 						});
 						await novelPage.close();
@@ -224,6 +224,7 @@ export default async function handler(
 							novelName: novel.name,
 							error: "Chapter already exists",
 						});
+						await novelPage.close();
 						continue;
 					}
 		
