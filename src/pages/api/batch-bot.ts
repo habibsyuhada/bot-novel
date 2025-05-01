@@ -1,7 +1,7 @@
 import { NextApiRequest, NextApiResponse } from "next";
 import { supabase } from "../../lib/supabase";
 import puppeteer from "puppeteer";
-import path from "path";
+// import path from "path";
 
 type BatchProcessResponse = {
   success: boolean;
@@ -45,14 +45,17 @@ export default async function handler(
 
   try {
     // Path ke Chrome yang sudah terinstal
-    const chromePath = "C:\\Program Files (x86)\\Google\\Chrome\\Application\\chrome.exe";
-    const userDataDir = path.join(process.env.USERPROFILE || "", "AppData", "Local", "Google", "Chrome", "User Data");
+    // const chromePath = "C:\\Program Files (x86)\\Google\\Chrome\\Application\\chrome.exe";
+    // const userDataDir = path.join(process.env.USERPROFILE || "", "AppData", "Local", "Google", "Chrome", "User Data");
+		// console.log(userDataDir);
 
     // Launch browser sekali untuk semua novel
     const browser = await puppeteer.launch({
       // headless: false,
-      executablePath: chromePath,
-      userDataDir: userDataDir,
+			// timeout: 0,
+      // executablePath: chromePath,
+      // userDataDir: userDataDir,
+      userDataDir: "./my-user-data-puppeteer",
       args: [
         "--no-sandbox",
         "--disable-setuid-sandbox",
@@ -60,6 +63,10 @@ export default async function handler(
       ],
       ignoreDefaultArgs: ["--disable-extensions"],
     });
+		const novelPage = await browser.newPage();
+		const deeplPage = await browser.newPage();
+
+		// await new Promise((resolve) => setTimeout(resolve, 10000000));
 
     // Proses setiap novel secara berurutan
     for (const novelId of novelIds) {
@@ -82,6 +89,7 @@ export default async function handler(
         }
 
         let currentUrl = novel.last_url_translated;
+				let saveUrl = novel.last_url_translated;
         if (!currentUrl) {
           results.push({
             novelId: novel.id,
@@ -97,9 +105,9 @@ export default async function handler(
         // Proses chapter untuk novel ini
         while (processedChapters < chaptersToProcess) {
 					console.log(`Processing chapter ${processedChapters + 1}/${chaptersToProcess}: ${currentUrl}`);
+					saveUrl = currentUrl;
 		
 					// Open novel page
-					const novelPage = await browser.newPage();
 					await novelPage.goto(currentUrl, {
 						waitUntil: "networkidle2",
 					});
@@ -166,6 +174,7 @@ export default async function handler(
 		
 					if (!text) {
 						console.log("No content found on the page. Skipping chapter.");
+						// await novelPage.close();
 						break;
 					}
 		
@@ -178,7 +187,7 @@ export default async function handler(
 							novelName: novel.name,
 							error: "Premium content detected",
 						});
-						await novelPage.close();
+						// await novelPage.close();
             break;
 					}
 		
@@ -193,7 +202,7 @@ export default async function handler(
 		
 					if (!nextChapterUrl) {
 						console.log("No next chapter link found. Ending process.");
-						await novelPage.close();
+						// await novelPage.close();
 						break;
 					}
 		
@@ -224,12 +233,11 @@ export default async function handler(
 							novelName: novel.name,
 							error: "Chapter already exists",
 						});
-						await novelPage.close();
+						// await novelPage.close();
 						continue;
 					}
 		
 					// Open DeepL in a new tab
-					const deeplPage = await browser.newPage();
 					await deeplPage.goto("https://www.deepl.com/en/translator", {
 						waitUntil: "networkidle2",
 					});
@@ -257,7 +265,7 @@ export default async function handler(
 					// Try to get translation up to 3 times if it's empty
 					let translatedText = "";
 					let attempts = 0;
-					const maxAttempts = 3;
+					const maxAttempts = 15;
 		
 					while ((translatedText === "" || translatedText.includes("[...]")) && attempts < maxAttempts) {
 						// Wait for 2 seconds before getting the translation
@@ -318,6 +326,7 @@ export default async function handler(
 								chapter: chapterNumber,
 								title: chapterTitle,
 								text: cleanedTranslatedText,
+								url: saveUrl,
 							},
 						]);
 		
@@ -339,21 +348,21 @@ export default async function handler(
 		
 							// Update the last_url_translated in the novel table
 							if(!currentUrl.includes("/null")){
-								const { error: updateError } = await supabase.from("novel").update({ last_url_translated: currentUrl }).eq("id", novelId);
+								const { error: updateError } = await supabase.from("novel").update({ last_url_translated: saveUrl }).eq("id", novelId);
 			
 								if (updateError) {
 									console.error("Error updating last_url_translated:", updateError);
 								}
 							}
 							else{
+								console.log("No more chapters to process");
+								console.log(currentUrl);
 								break;
 							}
 						}
 					}
 		
 					// Close both pages
-					await novelPage.close();
-					await deeplPage.close();
 		
 					// Increment counter
 					processedChapters++;
@@ -378,6 +387,8 @@ export default async function handler(
       }
     }
 
+		await novelPage.close();
+		await deeplPage.close();
     await browser.close();
 
     return res.status(200).json({
