@@ -1,7 +1,7 @@
 import { NextApiRequest, NextApiResponse } from "next";
 import { supabase } from "../../lib/supabase";
 import puppeteer from "puppeteer";
-// import path from "path";
+import path from "path";
 
 type BatchProcessResponse = {
   success: boolean;
@@ -45,14 +45,14 @@ export default async function handler(
 
   try {
     // Path ke Chrome yang sudah terinstal
-    // const chromePath = "C:\\Program Files (x86)\\Google\\Chrome\\Application\\chrome.exe";
-    // const userDataDir = path.join(process.env.USERPROFILE || "", "AppData", "Local", "Google", "Chrome", "User Data");
+    const chromePath = "C:\\Program Files (x86)\\Google\\Chrome\\Application\\chrome.exe";
+    const userDataDir = path.join(process.env.USERPROFILE || "", "AppData", "Local", "Google", "Chrome", "User Data");
 		// console.log(userDataDir);
 
     // Launch browser sekali untuk semua novel
     const browser = await puppeteer.launch({
       // headless: false,
-			// timeout: 0,
+			timeout: 0,
       // executablePath: chromePath,
       // userDataDir: userDataDir,
       userDataDir: "./my-user-data-puppeteer",
@@ -66,7 +66,48 @@ export default async function handler(
 		const novelPage = await browser.newPage();
 		const deeplPage = await browser.newPage();
 
+		// Set a realistic user agent for a Chromium browser
+		await novelPage.setUserAgent('Mozilla/5.0 (Windows NT 10.0; Win64; x64) ' +
+			'AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36');
+		
+		// Override browser properties to reduce detectable traits
+		await novelPage.evaluateOnNewDocument(() => {
+			Object.defineProperty(navigator, 'webdriver', { get: () => false });
+			// Randomize canvas fingerprinting to avoid detection
+			HTMLCanvasElement.prototype.toDataURL = function() {
+				return 'data:image/png;base64,randomized-value';
+			};
+		});
+
+		// Set a realistic user agent for a Chromium browser
+		await deeplPage.setUserAgent('Mozilla/5.0 (Windows NT 10.0; Win64; x64) ' +
+			'AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36');
+		
+		// Override browser properties to reduce detectable traits
+		await deeplPage.evaluateOnNewDocument(() => {
+			Object.defineProperty(navigator, 'webdriver', { get: () => false });
+			// Randomize canvas fingerprinting to avoid detection
+			HTMLCanvasElement.prototype.toDataURL = function() {
+				return 'data:image/png;base64,randomized-value';
+			};
+		});
+
 		// await new Promise((resolve) => setTimeout(resolve, 10000000));
+
+		const { data: novelChaptersReport, error: novelChaptersReportError } = await supabase
+      .from('novel_chapter')
+      .select('id, url')
+			.eq("report", 1)
+      .order('id');
+
+		if (novelChaptersReportError) {
+			console.error("Error fetching novel chapters report:", novelChaptersReportError);
+		}
+
+		let isNovelReport = false;
+		if (novelChaptersReport && novelChaptersReport.length > 0) {
+			isNovelReport = true;
+		}
 
     // Proses setiap novel secara berurutan
     for (const novelId of novelIds) {
@@ -104,12 +145,15 @@ export default async function handler(
 
         // Proses chapter untuk novel ini
         while (processedChapters < chaptersToProcess) {
+					currentUrl = currentUrl.replace("novelbin.com", "novelbin.me");
+					currentUrl = currentUrl.replace("/novel-book/", "/b/");
 					console.log(`Processing chapter ${processedChapters + 1}/${chaptersToProcess}: ${currentUrl}`);
 					saveUrl = currentUrl;
 		
 					// Open novel page
 					await novelPage.goto(currentUrl, {
 						waitUntil: "networkidle2",
+						timeout: 0,
 					});
 		
 					// Extract chapter title
@@ -208,6 +252,7 @@ export default async function handler(
 		
 					// Convert relative URL to absolute if needed
 					currentUrl = nextChapterUrl.startsWith("http") ? nextChapterUrl : new URL(nextChapterUrl, currentUrl).toString();
+
 		
 					// Extract chapter number from title or URL if possible
 					let chapterNumber = processedChapters + 1; // Default to the processed count
@@ -240,6 +285,7 @@ export default async function handler(
 					// Open DeepL in a new tab
 					await deeplPage.goto("https://www.deepl.com/en/translator", {
 						waitUntil: "networkidle2",
+						timeout: 0,
 					});
 		
 					// Try to paste the text first, if it fails, fall back to typing
@@ -256,11 +302,12 @@ export default async function handler(
 					}
 					await deeplPage.type(".min-h-0 > div:nth-child(1)", " ");
 		
-					await deeplPage.waitForSelector(".hidden > div:nth-child(4) .Icon");
+					// await deeplPage.waitForSelector(".hidden > div:nth-child(4) .Icon");
+					await deeplPage.waitForSelector(".hidden > div:nth-child(4) .Icon", { timeout: 0 });
 					await deeplPage.click(".hidden > div:nth-child(4) .Icon");
 		
 					// Wait for translation to complete
-					await deeplPage.waitForSelector('d-textarea[aria-labelledby="translation-target-heading"]', { timeout: 2000 });
+					// await deeplPage.waitForSelector('d-textarea[aria-labelledby="translation-target-heading"]', { timeout: 2000 });
 		
 					// Try to get translation up to 3 times if it's empty
 					let translatedText = "";
@@ -387,8 +434,8 @@ export default async function handler(
       }
     }
 
-		await novelPage.close();
-		await deeplPage.close();
+		// await novelPage.close();
+		// await deeplPage.close();
     await browser.close();
 
     return res.status(200).json({
