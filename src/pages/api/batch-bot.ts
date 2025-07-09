@@ -18,6 +18,8 @@ type BatchProcessResponse = {
   error?: string;
 };
 
+const translator = "deepl"; // deepl, merlin
+
 export default async function handler(
   req: NextApiRequest,
   res: NextApiResponse<BatchProcessResponse>
@@ -51,7 +53,7 @@ export default async function handler(
 
     // Launch browser sekali untuk semua novel
     const browser = await puppeteer.launch({
-      // headless: false,
+      headless: false,
 			timeout: 0,
       // executablePath: chromePath,
       // userDataDir: userDataDir,
@@ -64,7 +66,7 @@ export default async function handler(
       ignoreDefaultArgs: ["--disable-extensions"],
     });
 		const novelPage = await browser.newPage();
-		const deeplPage = await browser.newPage();
+		const translatorPage = await browser.newPage();
 
 		// Set a realistic user agent for a Chromium browser
 		await novelPage.setUserAgent('Mozilla/5.0 (Windows NT 10.0; Win64; x64) ' +
@@ -80,11 +82,11 @@ export default async function handler(
 		});
 
 		// Set a realistic user agent for a Chromium browser
-		await deeplPage.setUserAgent('Mozilla/5.0 (Windows NT 10.0; Win64; x64) ' +
+		await translatorPage.setUserAgent('Mozilla/5.0 (Windows NT 10.0; Win64; x64) ' +
 			'AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36');
 		
 		// Override browser properties to reduce detectable traits
-		await deeplPage.evaluateOnNewDocument(() => {
+		await translatorPage.evaluateOnNewDocument(() => {
 			Object.defineProperty(navigator, 'webdriver', { get: () => false });
 			// Randomize canvas fingerprinting to avoid detection
 			HTMLCanvasElement.prototype.toDataURL = function() {
@@ -92,7 +94,7 @@ export default async function handler(
 			};
 		});
 
-		// await new Promise((resolve) => setTimeout(resolve, 10000000));
+		await new Promise((resolve) => setTimeout(resolve, 10000000));
 
 		const { data: novelChaptersReport, error: novelChaptersReportError } = await supabase
       .from('novel_chapter')
@@ -282,57 +284,66 @@ export default async function handler(
 						continue;
 					}
 		
-					// Open DeepL in a new tab
-					await deeplPage.goto("https://www.deepl.com/en/translator", {
-						waitUntil: "networkidle2",
-						timeout: 0,
-					});
-		
-					// Try to paste the text first, if it fails, fall back to typing
-					try {
-						await deeplPage.evaluate((text) => {
-							const element = document.querySelector(".min-h-0 > div:nth-child(1)");
-							if (element) {
-								element.textContent = text;
-							}
-						}, text);
-					} catch (error) {
-						console.log("Paste failed, falling back to typing:", error);
-						await deeplPage.type(".min-h-0 > div:nth-child(1)", text);
-					}
-					await deeplPage.type(".min-h-0 > div:nth-child(1)", " ");
-		
-					// await deeplPage.waitForSelector(".hidden > div:nth-child(4) .Icon");
-					await deeplPage.waitForSelector(".hidden > div:nth-child(4) .Icon", { timeout: 0 });
-					await deeplPage.click(".hidden > div:nth-child(4) .Icon");
-		
-					// Wait for translation to complete
-					// await deeplPage.waitForSelector('d-textarea[aria-labelledby="translation-target-heading"]', { timeout: 2000 });
-		
-					// Try to get translation up to 3 times if it's empty
 					let translatedText = "";
-					let attempts = 0;
-					const maxAttempts = 15;
-		
-					while ((translatedText === "" || translatedText.includes("[...]")) && attempts < maxAttempts) {
-						// Wait for 2 seconds before getting the translation
-						await new Promise((resolve) => setTimeout(resolve, 2000));
-		
-						translatedText = await deeplPage.evaluate(() => {
-							const textElement = document.querySelector('d-textarea[aria-labelledby="translation-target-heading"]');
-							return textElement ? (textElement as HTMLElement).innerText?.trim() || "" : "";
+					if(translator === "deepl"){
+						// Open DeepL in a new tab
+						await translatorPage.goto("https://www.deepl.com/en/translator", {
+							waitUntil: "networkidle2",
+							timeout: 0,
 						});
-		
-						attempts++;
-						if ((translatedText === "" || translatedText.includes("[...]")) && attempts < maxAttempts) {
-						  console.log(`Translation attempt ${attempts} failed, trying again...`);
+			
+						// Try to paste the text first, if it fails, fall back to typing
+						try {
+							await translatorPage.evaluate((text) => {
+								const element = document.querySelector(".min-h-0 > div:nth-child(1)");
+								if (element) {
+									element.textContent = text;
+								}
+							}, text);
+						} catch (error) {
+							console.log("Paste failed, falling back to typing:", error);
+							await translatorPage.type(".min-h-0 > div:nth-child(1)", text);
+						}
+						await translatorPage.type(".min-h-0 > div:nth-child(1)", " ");
+			
+						// await translatorPage.waitForSelector(".hidden > div:nth-child(4) .Icon");
+						await translatorPage.waitForSelector(".hidden > div:nth-child(4) .Icon", { timeout: 0 });
+						await translatorPage.click(".hidden > div:nth-child(4) .Icon");
+			
+						// Wait for translation to complete
+						// await translatorPage.waitForSelector('d-textarea[aria-labelledby="translation-target-heading"]', { timeout: 2000 });
+			
+						// Try to get translation up to 3 times if it's empty
+						let attempts = 0;
+						const maxAttempts = 15;
+			
+						while ((translatedText === "" || translatedText.includes("[...]")) && attempts < maxAttempts) {
+							// Wait for 2 seconds before getting the translation
+							await new Promise((resolve) => setTimeout(resolve, 2000));
+			
+							translatedText = await translatorPage.evaluate(() => {
+								const textElement = document.querySelector('d-textarea[aria-labelledby="translation-target-heading"]');
+								return textElement ? (textElement as HTMLElement).innerText?.trim() || "" : "";
+							});
+			
+							attempts++;
+							if ((translatedText === "" || translatedText.includes("[...]")) && attempts < maxAttempts) {
+								console.log(`Translation attempt ${attempts} failed, trying again...`);
+							}
+						}
+			
+						if (translatedText === "" || translatedText.includes("[...]")) {
+							console.log("Translation failed. Skipping chapter.");
+							// console.log("translatedText", translatedText);
+							// console.log("text", text);
 						}
 					}
-		
-					if (translatedText === "" || translatedText.includes("[...]")) {
-						console.log("Translation failed. Skipping chapter.");
-						// console.log("translatedText", translatedText);
-						// console.log("text", text);
+					else if(translator === "merlin"){
+						// Open Merlin in a new tab
+						await translatorPage.goto("https://www.getmerlin.in/id/chat/tools/language-translator", {
+							waitUntil: "networkidle2",
+							timeout: 0,
+						});
 					}
 		
 					// Clean up excessive newlines in the translated text
@@ -435,7 +446,7 @@ export default async function handler(
     }
 
 		// await novelPage.close();
-		// await deeplPage.close();
+		// await translatorPage.close();
     await browser.close();
 
     return res.status(200).json({
