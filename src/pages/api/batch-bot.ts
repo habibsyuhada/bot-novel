@@ -18,7 +18,7 @@ type BatchProcessResponse = {
   error?: string;
 };
 
-const translator = "deepl"; // deepl, merlin
+const translator = "chatgpt"; // deepl, merlin, chatgpt
 
 export default async function handler(
   req: NextApiRequest,
@@ -338,6 +338,12 @@ export default async function handler(
 							// console.log("text", text);
 						}
 					}
+					else if(translator === "chatgpt"){
+						await translatorPage.goto("https://chatgpt.com/g/g-4VREEJVYf-indonesian-bahasa-english-translator", {
+							waitUntil: "networkidle2",
+							timeout: 0,
+						});
+					}
 					else if(translator === "merlin"){
 						// Open Merlin in a new tab
 						await translatorPage.goto("https://www.getmerlin.in/id/chat/tools/language-translator", {
@@ -466,3 +472,115 @@ export default async function handler(
     });
   }
 } 
+
+
+
+//======================================================================
+// const puppeteer = require('puppeteer'); // v23.0.0 or later
+
+// (async () => {
+//     const browser = await puppeteer.launch();
+//     const page = await browser.newPage();
+//     const timeout = 5000;
+//     page.setDefaultTimeout(timeout);
+
+//     {
+//         const targetPage = page;
+//         await targetPage.setViewport({
+//             width: 991,
+//             height: 810
+//         })
+//     }
+//     {
+//         const targetPage = page;
+//         await targetPage.goto('https://chatgpt.com/g/g-4VREEJVYf-indonesian-bahasa-english-translator/c/686e8fb8-1aa8-8004-871a-d5a0289b5ff8');
+//     }
+//     {
+//         const targetPage = page;
+//         await targetPage.goto('https://chatgpt.com/g/g-4VREEJVYf-indonesian-bahasa-english-translator');
+//     }
+//     {
+//         const targetPage = page;
+//         await puppeteer.Locator.race([
+//             targetPage.locator('::-p-aria([role=\\"region\\"]) >>>> ::-p-aria([role=\\"paragraph\\"])'),
+//             targetPage.locator('p'),
+//             targetPage.locator('::-p-xpath(//*[@id=\\"prompt-textarea\\"]/p)'),
+//             targetPage.locator(':scope >>> p')
+//         ])
+//             .setTimeout(timeout)
+//             .click({
+//               offset: {
+//                 x: 158.17453002929688,
+//                 y: 8.4197998046875,
+//               },
+//             });
+//     }
+//     {
+//         const targetPage = page;
+//         await puppeteer.Locator.race([
+//             targetPage.locator('#prompt-textarea'),
+//             targetPage.locator('::-p-xpath(//*[@id=\\"prompt-textarea\\"])'),
+//             targetPage.locator(':scope >>> #prompt-textarea')
+//         ])
+//             .setTimeout(timeout)
+//             .fill('HOW ARE YOU?');
+//     }
+//     {
+//         const targetPage = page;
+//         await targetPage.keyboard.up('/');
+//     }
+//     {
+//         const targetPage = page;
+//         await puppeteer.Locator.race([
+//             targetPage.locator('::-p-aria(Kirim perintah) >>>> ::-p-aria([role=\\"image\\"])'),
+//             targetPage.locator("[data-testid='send-button'] > svg"),
+//             targetPage.locator('::-p-xpath(//*[@data-testid=\\"send-button\\"]/svg)'),
+//             targetPage.locator(":scope >>> [data-testid='send-button'] > svg")
+//         ])
+//             .setTimeout(timeout)
+//             .click({
+//               offset: {
+//                 x: 13.16033935546875,
+//                 y: 14.4197998046875,
+//               },
+//             });
+//     }
+//     {
+//         const targetPage = page;
+//         await puppeteer.Locator.race([
+//             targetPage.locator('div.-mb-\\(--composer-overlap-px\\) p'),
+//             targetPage.locator('::-p-xpath(//*[@data-testid=\\"conversation-turn-2\\"]/div/div/div/div/div[1]/div/div/div/p)'),
+//             targetPage.locator(':scope >>> div.-mb-\\(--composer-overlap-px\\) p')
+//         ])
+//             .setTimeout(timeout)
+//             .click({
+//               count: 2,
+//               offset: {
+//                 x: 85.15567016601562,
+//                 y: 13.075469970703125,
+//               },
+//             });
+//     }
+//     {
+//         const targetPage = page;
+//         await targetPage.keyboard.down('Control');
+//     }
+//     {
+//         const targetPage = page;
+//         await targetPage.keyboard.down('c');
+//     }
+//     {
+//         const targetPage = page;
+//         await targetPage.keyboard.up('c');
+//     }
+//     {
+//         const targetPage = page;
+//         await targetPage.keyboard.up('Control');
+//     }
+
+//     await browser.close();
+
+// })().catch(err => {
+//     console.error(err);
+//     process.exit(1);
+// });
