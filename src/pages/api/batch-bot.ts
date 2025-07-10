@@ -59,6 +59,7 @@ export default async function handler(
       // userDataDir: userDataDir,
       userDataDir: "./my-user-data-puppeteer",
       args: [
+				"--disable-infobars",
         "--no-sandbox",
         "--disable-setuid-sandbox",
         "--profile-directory=Default",
@@ -93,8 +94,6 @@ export default async function handler(
 				return 'data:image/png;base64,randomized-value';
 			};
 		});
-
-		await new Promise((resolve) => setTimeout(resolve, 10000000));
 
 		const { data: novelChaptersReport, error: novelChaptersReportError } = await supabase
       .from('novel_chapter')
@@ -343,6 +342,16 @@ export default async function handler(
 							waitUntil: "networkidle2",
 							timeout: 0,
 						});
+
+						await puppeteer.Locator.race([
+							translatorPage.locator('#prompt-textarea'),
+							translatorPage.locator('::-p-xpath(//*[@id=\\"prompt-textarea\\"])'),
+							translatorPage.locator(':scope >>> #prompt-textarea')
+						])
+						.setTimeout(0)
+						.fill('HOW ARE YOU?');
+
+						await new Promise((resolve) => setTimeout(resolve, 10000000));
 					}
 					else if(translator === "merlin"){
 						// Open Merlin in a new tab
@@ -350,6 +359,17 @@ export default async function handler(
 							waitUntil: "networkidle2",
 							timeout: 0,
 						});
+
+						await puppeteer.Locator.race([
+							translatorPage.locator('::-p-aria(Language Translator[role=\\"textbox\\"])'),
+							translatorPage.locator('#language-translator-input'),
+							translatorPage.locator('::-p-xpath(//*[@id=\\"language-translator-input\\"])'),
+							translatorPage.locator(':scope >>> #language-translator-input')
+						])
+							.setTimeout(0)
+							.fill('HOW ARE YOU?');
+
+						
 					}
 		
 					// Clean up excessive newlines in the translated text
