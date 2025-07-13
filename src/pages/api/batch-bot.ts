@@ -18,7 +18,7 @@ type BatchProcessResponse = {
   error?: string;
 };
 
-const translator = "chatgpt"; // deepl, merlin, chatgpt
+const translator = "merlin"; // deepl, merlin, chatgpt
 
 export default async function handler(
   req: NextApiRequest,
@@ -109,6 +109,8 @@ export default async function handler(
 		if (novelChaptersReport && novelChaptersReport.length > 0) {
 			isNovelReport = true;
 		}
+
+		// await new Promise((resolve) => setTimeout(resolve, 10000000));
 
     // Proses setiap novel secara berurutan
     for (const novelId of novelIds) {
@@ -329,7 +331,7 @@ export default async function handler(
 							if ((translatedText === "" || translatedText.includes("[...]")) && attempts < maxAttempts) {
 								console.log(`Translation attempt ${attempts} failed, trying again...`);
 							}
-						}
+						} 
 			
 						if (translatedText === "" || translatedText.includes("[...]")) {
 							console.log("Translation failed. Skipping chapter.");
@@ -343,43 +345,69 @@ export default async function handler(
 							timeout: 0,
 						});
 
-						await puppeteer.Locator.race([
-							translatorPage.locator('#prompt-textarea'),
-							translatorPage.locator('::-p-xpath(//*[@id=\\"prompt-textarea\\"])'),
-							translatorPage.locator(':scope >>> #prompt-textarea')
-						])
-						.setTimeout(0)
-						.fill('HOW ARE YOU?');
+						try {
+							await translatorPage.evaluate((text) => {
+								const element = document.querySelector("#prompt-textarea");
+								if (element) {
+									element.textContent = text;
+								}
+							}, text);
+						} catch (error) {
+							console.log("Paste failed, falling back to typing:", error);
+							await translatorPage.type("#prompt-textarea", text);
+						}
+						await translatorPage.type("#prompt-textarea", " ");
 
 						await new Promise((resolve) => setTimeout(resolve, 10000000));
 					}
 					else if(translator === "merlin"){
 						// Open Merlin in a new tab
-						await translatorPage.goto("https://www.getmerlin.in/id/chat/tools/language-translator", {
+						await translatorPage.goto("https://sider.ai/id/translator/text-translator", {
 							waitUntil: "networkidle2",
 							timeout: 0,
 						});
+						await translatorPage.click("div[data-node-key='9']");
 
-						await puppeteer.Locator.race([
-							translatorPage.locator('::-p-aria(Language Translator[role=\\"textbox\\"])'),
-							translatorPage.locator('#language-translator-input'),
-							translatorPage.locator('::-p-xpath(//*[@id=\\"language-translator-input\\"])'),
-							translatorPage.locator(':scope >>> #language-translator-input')
-						])
-							.setTimeout(0)
-							.fill('HOW ARE YOU?');
+						// try {
+						// 	await translatorPage.evaluate((text) => {
+						// 		const element = document.querySelector("div.editor-input");
+						// 		console.log(element);
+						// 		if (element) {
+						// 			element.textContent = text;
+						// 		}
+						// 	}, text);
+						// } catch (error) {
+						// 	console.log("Paste failed, falling back to typing:", error);
+						// 	await translatorPage.type("div.editor-input", text);
+						// }
+						await translatorPage.type(".editor-input", text, {delay: 0});
+						await translatorPage.click('.text-white.cursor-pointer.bg-\\[\\#8A57EA\\].select-none.flex.items-center.justify-center.py-\\[10px\\].px-\\[20px\\].rounded-full.gap-\\[8px\\].hover\\:bg-\\[\\#9668ec\\].active\\:bg-\\[\\#7c4ed3\\].transition-all');
 
-						
+						await translatorPage.waitForSelector('.relative.w-full.flex.justify-between.items-center .cursor-pointer', {
+							visible: true,
+							timeout: 300000
+						});
+
+						// await translatorPage.click('.relative.w-full.flex.justify-between.items-center .cursor-pointer');
+
+						translatedText = await translatorPage.evaluate(() => {
+							const textElement = document.querySelector('.translator-results-align');
+							return textElement ? (textElement as HTMLElement).innerText?.trim() || "" : "";
+						});
 					}
 		
 					// Clean up excessive newlines in the translated text
 					const cleanedTranslatedText = translatedText
+						.replace(/"""/g, '') // Remove triple quotes
 						.replace(/\n{2,}/g, "\n") // Replace 2 or more consecutive newlines with 1
 						.replace(/^\n+|\n+$/g, "") // Remove leading and trailing newlines
 						.split("\n")
 						.map((line) => line.trim())
 						.filter((line) => line.length > 0) // Remove empty lines
 						.join("\n");
+
+					console.log("cleanedTranslatedText", cleanedTranslatedText);
+					// await new Promise((resolve) => setTimeout(resolve, 10000000));
 		
 					// Option 1: Keep as is with single newlines
 		
