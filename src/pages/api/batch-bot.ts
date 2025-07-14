@@ -18,7 +18,7 @@ type BatchProcessResponse = {
   error?: string;
 };
 
-const translator = "merlin"; // deepl, merlin, chatgpt
+const translator = "siderai"; // deepl, siderai, chatgpt
 
 export default async function handler(
   req: NextApiRequest,
@@ -360,40 +360,59 @@ export default async function handler(
 
 						await new Promise((resolve) => setTimeout(resolve, 10000000));
 					}
-					else if(translator === "merlin"){
+					else if(translator === "siderai"){
 						// Open Merlin in a new tab
-						await translatorPage.goto("https://sider.ai/id/translator/text-translator", {
-							waitUntil: "networkidle2",
-							timeout: 0,
-						});
-						await translatorPage.click("div[data-node-key='9']");
+						// await translatorPage.goto("https://sider.ai/id/translator/text-translator", {
+						// 	waitUntil: "networkidle2",
+						// 	timeout: 0,
+						// });
+						// await translatorPage.click("div[data-node-key='9']");
 
-						// try {
-						// 	await translatorPage.evaluate((text) => {
-						// 		const element = document.querySelector("div.editor-input");
-						// 		console.log(element);
-						// 		if (element) {
-						// 			element.textContent = text;
-						// 		}
-						// 	}, text);
-						// } catch (error) {
-						// 	console.log("Paste failed, falling back to typing:", error);
-						// 	await translatorPage.type("div.editor-input", text);
-						// }
-						await translatorPage.type(".editor-input", text, {delay: 0});
-						await translatorPage.click('.text-white.cursor-pointer.bg-\\[\\#8A57EA\\].select-none.flex.items-center.justify-center.py-\\[10px\\].px-\\[20px\\].rounded-full.gap-\\[8px\\].hover\\:bg-\\[\\#9668ec\\].active\\:bg-\\[\\#7c4ed3\\].transition-all');
+						// await translatorPage.type(".editor-input", text, {delay: 0});
+						// await translatorPage.click('.text-white.cursor-pointer.bg-\\[\\#8A57EA\\].select-none.flex.items-center.justify-center.py-\\[10px\\].px-\\[20px\\].rounded-full.gap-\\[8px\\].hover\\:bg-\\[\\#9668ec\\].active\\:bg-\\[\\#7c4ed3\\].transition-all');
 
-						await translatorPage.waitForSelector('.relative.w-full.flex.justify-between.items-center .cursor-pointer', {
-							visible: true,
-							timeout: 300000
-						});
+						// await translatorPage.waitForSelector('.relative.w-full.flex.justify-between.items-center .cursor-pointer', {
+						// 	visible: true,
+						// 	timeout: 300000
+						// });
 
-						// await translatorPage.click('.relative.w-full.flex.justify-between.items-center .cursor-pointer');
+						// translatedText = await translatorPage.evaluate(() => {
+						// 	const textElement = document.querySelector('.translator-results-align');
+						// 	return textElement ? (textElement as HTMLElement).innerText?.trim() || "" : "";
+						// });
 
-						translatedText = await translatorPage.evaluate(() => {
-							const textElement = document.querySelector('.translator-results-align');
-							return textElement ? (textElement as HTMLElement).innerText?.trim() || "" : "";
-						});
+						const maxAttempts = 5; // Maksimal percobaan
+						let attempt = 0;
+
+						while (translatedText.length < 100 && attempt < maxAttempts) {
+							await translatorPage.goto("https://sider.ai/id/translator/text-translator", {
+								waitUntil: "networkidle2",
+								timeout: 0,
+							});
+							await translatorPage.click("div[data-node-key='9']");
+
+							await translatorPage.type(".editor-input", text, { delay: 0 });
+							await translatorPage.click('.text-white.cursor-pointer.bg-\\[\\#8A57EA\\].select-none.flex.items-center.justify-center.py-\\[10px\\].px-\\[20px\\].rounded-full.gap-\\[8px\\].hover\\:bg-\\[\\#9668ec\\].active\\:bg-\\[\\#7c4ed3\\].transition-all');
+
+							await translatorPage.waitForSelector('.relative.w-full.flex.justify-between.items-center .cursor-pointer', {
+								visible: true,
+								timeout: 300000
+							});
+
+							await translatorPage.waitForSelector('.translator-results-align', {
+								visible: true,
+								timeout: 300000
+							});
+
+							translatedText = await translatorPage.evaluate(() => {
+								const textElement = document.querySelector('.translator-results-align');
+								return textElement ? (textElement as HTMLElement).innerText?.trim() || "" : "";
+							});
+
+							attempt++;
+						}
+
+
 					}
 		
 					// Clean up excessive newlines in the translated text
@@ -406,7 +425,6 @@ export default async function handler(
 						.filter((line) => line.length > 0) // Remove empty lines
 						.join("\n");
 
-					console.log("cleanedTranslatedText", cleanedTranslatedText);
 					// await new Promise((resolve) => setTimeout(resolve, 10000000));
 		
 					// Option 1: Keep as is with single newlines
