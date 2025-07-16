@@ -396,12 +396,12 @@ export default async function handler(
 
 							await translatorPage.waitForSelector('.relative.w-full.flex.justify-between.items-center .cursor-pointer', {
 								visible: true,
-								timeout: 300000
+								timeout: 0
 							});
 
 							await translatorPage.waitForSelector('.translator-results-align', {
 								visible: true,
-								timeout: 300000
+								timeout: 0
 							});
 
 							translatedText = await translatorPage.evaluate(() => {
@@ -478,7 +478,7 @@ export default async function handler(
 		
 							// Update the last_url_translated in the novel table
 							if(!currentUrl.includes("/null")){
-								const { error: updateError } = await supabase.from("novel").update({ last_url_translated: saveUrl }).eq("id", novelId);
+								const { error: updateError } = await supabase.from("novel").update({ last_url_translated: saveUrl, updated_date: new Date(new Date().toLocaleString("en-US", { timeZone: "Asia/Jakarta" })) }).eq("id", novelId);
 			
 								if (updateError) {
 									console.error("Error updating last_url_translated:", updateError);
