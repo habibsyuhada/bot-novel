@@ -53,7 +53,7 @@ export default async function handler(
 
     // Launch browser sekali untuk semua novel
     const browser = await puppeteer.launch({
-      headless: false,
+      // headless: false,
 			timeout: 0,
       // executablePath: chromePath,
       // userDataDir: userDataDir,
@@ -381,27 +381,55 @@ export default async function handler(
 						// 	return textElement ? (textElement as HTMLElement).innerText?.trim() || "" : "";
 						// });
 
+						await novelPage.evaluate((textToCopy) => {
+							// Create a temporary textarea to copy text
+							const textarea = document.createElement('textarea');
+							textarea.value = textToCopy;
+							document.body.appendChild(textarea);
+							textarea.select();
+							document.execCommand('copy');
+							document.body.removeChild(textarea);
+						}, text);
+
+
 						const maxAttempts = 5; // Maksimal percobaan
 						let attempt = 0;
 
-						while (translatedText.length < 100 && attempt < maxAttempts) {
+						while (translatedText.length < 2000 && attempt < maxAttempts) {
 							await translatorPage.goto("https://sider.ai/id/translator/text-translator", {
 								waitUntil: "networkidle2",
 								timeout: 0,
 							});
 							await translatorPage.click("div[data-node-key='9']");
 
-							await translatorPage.type(".editor-input", text, { delay: 0 });
-							await translatorPage.click('.text-white.cursor-pointer.bg-\\[\\#8A57EA\\].select-none.flex.items-center.justify-center.py-\\[10px\\].px-\\[20px\\].rounded-full.gap-\\[8px\\].hover\\:bg-\\[\\#9668ec\\].active\\:bg-\\[\\#7c4ed3\\].transition-all');
+							// await translatorPage.type(".editor-input", text, { delay: 0 });
+							await translatorPage.click('.editor-input');
+							await translatorPage.keyboard.down('Control');
+							await translatorPage.keyboard.press('V');
+							await translatorPage.keyboard.up('Control');
+
+
+							// await translatorPage.click('.text-white.cursor-pointer.transition-all');
+							// await translatorPage.evaluate((selector) => {
+							// 	const element = document.querySelector(selector);
+							// 	if (element) {
+							// 		element.click();  // Klik langsung via JavaScript
+							// 	}
+							// }, 'div.text-white.cursor-pointer.transition-all');
+							await translatorPage.click('div.text-white.cursor-pointer.transition-all', { 
+								force: true,  // Mencoba klik tanpa menunggu kondisi tertentu
+								delay: 100    // Tambahkan sedikit delay
+							});
+
 
 							await translatorPage.waitForSelector('.relative.w-full.flex.justify-between.items-center .cursor-pointer', {
 								visible: true,
-								timeout: 300000
+								timeout: 0
 							});
 
 							await translatorPage.waitForSelector('.translator-results-align', {
 								visible: true,
-								timeout: 300000
+								timeout: 0
 							});
 
 							translatedText = await translatorPage.evaluate(() => {
@@ -410,6 +438,7 @@ export default async function handler(
 							});
 
 							attempt++;
+							console.log("Ngulang Translate ke-"+attempt)
 						}
 
 
@@ -478,7 +507,14 @@ export default async function handler(
 		
 							// Update the last_url_translated in the novel table
 							if(!currentUrl.includes("/null")){
-								const { error: updateError } = await supabase.from("novel").update({ last_url_translated: saveUrl }).eq("id", novelId);
+								const date = new Date();
+								const indonesiaTime = new Date(date.toLocaleString('en-US', { timeZone: 'Asia/Jakarta' }));
+
+								// Mengonversi ke ISO 8601 dengan mengurangi selisih waktu UTC+7
+								const utcDate = new Date(indonesiaTime.getTime() - (indonesiaTime.getTimezoneOffset() * 60000)).toISOString();
+
+
+								const { error: updateError } = await supabase.from("novel").update({ last_url_translated: saveUrl,updated_date: utcDate }).eq("id", novelId);
 			
 								if (updateError) {
 									console.error("Error updating last_url_translated:", updateError);
