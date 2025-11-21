@@ -18,7 +18,9 @@ type BatchProcessResponse = {
   error?: string;
 };
 
-const translator = "siderai"; // deepl, siderai, chatgpt
+const translator = "deepl"; // deepl, siderai, chatgpt
+const headless = true; // false munculin browser, true kagak
+const waiting = false; // nunggu 10jt detik
 
 export default async function handler(
   req: NextApiRequest,
@@ -53,7 +55,7 @@ export default async function handler(
 
     // Launch browser sekali untuk semua novel
     const browser = await puppeteer.launch({
-      // headless: false,
+      headless: headless,
 			timeout: 0,
       // executablePath: chromePath,
       // userDataDir: userDataDir,
@@ -109,8 +111,10 @@ export default async function handler(
 		if (novelChaptersReport && novelChaptersReport.length > 0) {
 			isNovelReport = true;
 		}
-
-		// await new Promise((resolve) => setTimeout(resolve, 10000000));
+		
+		if(waiting){
+			await new Promise((resolve) => setTimeout(resolve, 10000000));
+		}
 
     // Proses setiap novel secara berurutan
     for (const novelId of novelIds) {
@@ -308,8 +312,10 @@ export default async function handler(
 						await translatorPage.type(".min-h-0 > div:nth-child(1)", " ");
 			
 						// await translatorPage.waitForSelector(".hidden > div:nth-child(4) .Icon");
-						await translatorPage.waitForSelector(".hidden > div:nth-child(4) .Icon", { timeout: 0 });
-						await translatorPage.click(".hidden > div:nth-child(4) .Icon");
+						// await translatorPage.waitForSelector(".hidden > div:nth-child(4) .Icon", { timeout: 0 });
+						// await translatorPage.click(".hidden > div:nth-child(4) .Icon");
+
+						await new Promise((resolve) => setTimeout(resolve, 10000));
 			
 						// Wait for translation to complete
 						// await translatorPage.waitForSelector('d-textarea[aria-labelledby="translation-target-heading"]', { timeout: 2000 });
@@ -421,10 +427,11 @@ export default async function handler(
 								delay: 100    // Tambahkan sedikit delay
 							});
 
+							await new Promise((resolve) => setTimeout(resolve, 60000));
 
 							await translatorPage.waitForSelector('.relative.w-full.flex.justify-between.items-center .cursor-pointer', {
 								visible: true,
-								timeout: 0
+								timeout: 480000000
 							});
 
 							await translatorPage.waitForSelector('.translator-results-align', {

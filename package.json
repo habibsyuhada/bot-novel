@@ -12,6 +12,8 @@
     "@supabase/supabase-js": "^2.49.1",
     "next": "15.1.7",
     "puppeteer": "^24.3.0",
+    "puppeteer-extra": "^3.3.6",
+    "puppeteer-extra-plugin-stealth": "^2.11.2",
     "react": "^19.0.0",
     "react-dom": "^19.0.0"
   },
