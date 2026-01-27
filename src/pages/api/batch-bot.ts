@@ -18,7 +18,7 @@ type BatchProcessResponse = {
   error?: string;
 };
 
-const translator = "deepl"; // deepl, siderai, chatgpt
+let translator = "quilbot"; // deepl, siderai, chatgpt, quilbot
 const headless = true; // false munculin browser, true kagak
 const waiting = false; // nunggu 10jt detik
 
@@ -53,6 +53,7 @@ export default async function handler(
     const userDataDir = path.join(process.env.USERPROFILE || "", "AppData", "Local", "Google", "Chrome", "User Data");
 		// console.log(userDataDir);
 
+		console.log('0000000')
     // Launch browser sekali untuk semua novel
     const browser = await puppeteer.launch({
       headless: headless,
@@ -71,31 +72,35 @@ export default async function handler(
 		const novelPage = await browser.newPage();
 		const translatorPage = await browser.newPage();
 
-		// Set a realistic user agent for a Chromium browser
-		await novelPage.setUserAgent('Mozilla/5.0 (Windows NT 10.0; Win64; x64) ' +
-			'AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36');
+		// // Set a realistic user agent for a Chromium browser
+		// await novelPage.setUserAgent('Mozilla/5.0 (Windows NT 10.0; Win64; x64) ' +
+		// 	'AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36');
 		
-		// Override browser properties to reduce detectable traits
-		await novelPage.evaluateOnNewDocument(() => {
-			Object.defineProperty(navigator, 'webdriver', { get: () => false });
-			// Randomize canvas fingerprinting to avoid detection
-			HTMLCanvasElement.prototype.toDataURL = function() {
-				return 'data:image/png;base64,randomized-value';
-			};
-		});
+		// // Override browser properties to reduce detectable traits
+		// await novelPage.evaluateOnNewDocument(() => {
+		// 	Object.defineProperty(navigator, 'webdriver', { get: () => false });
+		// 	// Randomize canvas fingerprinting to avoid detection
+		// 	HTMLCanvasElement.prototype.toDataURL = function() {
+		// 		return 'data:image/png;base64,randomized-value';
+		// 	};
+		// });
 
-		// Set a realistic user agent for a Chromium browser
-		await translatorPage.setUserAgent('Mozilla/5.0 (Windows NT 10.0; Win64; x64) ' +
-			'AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36');
+		// // Set a realistic user agent for a Chromium browser
+		// await translatorPage.setUserAgent('Mozilla/5.0 (Windows NT 10.0; Win64; x64) ' +
+		// 	'AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36');
 		
-		// Override browser properties to reduce detectable traits
-		await translatorPage.evaluateOnNewDocument(() => {
-			Object.defineProperty(navigator, 'webdriver', { get: () => false });
-			// Randomize canvas fingerprinting to avoid detection
-			HTMLCanvasElement.prototype.toDataURL = function() {
-				return 'data:image/png;base64,randomized-value';
-			};
-		});
+		// // Override browser properties to reduce detectable traits
+		// await translatorPage.evaluateOnNewDocument(() => {
+		// 	Object.defineProperty(navigator, 'webdriver', { get: () => false });
+		// 	// Randomize canvas fingerprinting to avoid detection
+		// 	HTMLCanvasElement.prototype.toDataURL = function() {
+		// 		return 'data:image/png;base64,randomized-value';
+		// 	};
+		// });
+
+		if(waiting){
+			await new Promise((resolve) => setTimeout(resolve, 10000000));
+		}
 
 		const { data: novelChaptersReport, error: novelChaptersReportError } = await supabase
       .from('novel_chapter')
@@ -110,10 +115,6 @@ export default async function handler(
 		let isNovelReport = false;
 		if (novelChaptersReport && novelChaptersReport.length > 0) {
 			isNovelReport = true;
-		}
-		
-		if(waiting){
-			await new Promise((resolve) => setTimeout(resolve, 10000000));
 		}
 
     // Proses setiap novel secara berurutan
@@ -149,6 +150,7 @@ export default async function handler(
         }
 
         let processedChapters = 0;
+        let last_translate_text = '';
 
         // Proses chapter untuk novel ini
         while (processedChapters < chaptersToProcess) {
@@ -170,7 +172,7 @@ export default async function handler(
 					});
 		
 					// Extract chapter content
-					const text = await novelPage.evaluate(() => {
+					let text = await novelPage.evaluate(() => {
 						const contentElement = document.querySelector("#chr-content");
 		
 						if (!contentElement) return "";
@@ -263,9 +265,13 @@ export default async function handler(
 		
 					// Extract chapter number from title or URL if possible
 					let chapterNumber = processedChapters + 1; // Default to the processed count
-		
-					// Try to extract chapter number from title (e.g., "Chapter 123: Title" or "Chapter123: Title")
-					const chapterMatch = chapterTitle?.match(/chapter\s*(\d+)/i);
+
+					// Try to extract chapter number from title
+					// Supports:
+					// "Chapter 123: Title"
+					// "Chapter123: Title"
+					// "Chapter: 123 Title"
+					const chapterMatch = chapterTitle?.match(/chapter\s*:?\s*(\d+)/i);
 					if (chapterMatch && chapterMatch[1]) {
 						chapterNumber = parseInt(chapterMatch[1], 10);
 					}
@@ -288,9 +294,22 @@ export default async function handler(
 						// await novelPage.close();
 						continue;
 					}
+
+					if(text.substring(0, text.indexOf(' ')) != 'Chapter'){
+						text = chapterTitle + "\n" + text
+					}
 		
 					let translatedText = "";
+					let tranlateFailed = false;
+					let tranlateFailedReason = '';
 					if(translator === "deepl"){
+						const length_ori_text = text
+							.replace(/"""/g, '') // Remove triple quotes
+							.replace(/\n{2,}/g, "\n") // Replace 2 or more consecutive newlines with 1
+							.replace(/^\n+|\n+$/g, "") // Remove leading and trailing newlines
+							.split("\n")
+							.map((line) => line.trim())
+							.length // Remove empty lines
 						// Open DeepL in a new tab
 						await translatorPage.goto("https://www.deepl.com/en/translator", {
 							waitUntil: "networkidle2",
@@ -323,8 +342,10 @@ export default async function handler(
 						// Try to get translation up to 3 times if it's empty
 						let attempts = 0;
 						const maxAttempts = 15;
+						let check_cleanedTranslatedText = ''
+						let length_translate_text = 0
 			
-						while ((translatedText === "" || translatedText.includes("[...]")) && attempts < maxAttempts) {
+						while ((translatedText === "" || translatedText.includes("[...]") || check_cleanedTranslatedText == last_translate_text || length_translate_text != length_ori_text) && attempts < maxAttempts) {
 							// Wait for 2 seconds before getting the translation
 							await new Promise((resolve) => setTimeout(resolve, 2000));
 			
@@ -337,12 +358,101 @@ export default async function handler(
 							if ((translatedText === "" || translatedText.includes("[...]")) && attempts < maxAttempts) {
 								console.log(`Translation attempt ${attempts} failed, trying again...`);
 							}
+
+							check_cleanedTranslatedText = translatedText
+							.replace(/"""/g, '') // Remove triple quotes
+							.replace(/\n{2,}/g, "\n") // Replace 2 or more consecutive newlines with 1
+							.replace(/^\n+|\n+$/g, "") // Remove leading and trailing newlines
+							.split("\n")
+							.map((line) => line.trim())
+							.filter((line) => line.length > 0) // Remove empty lines
+							.join("\n");
+
+							length_translate_text = check_cleanedTranslatedText.split("\n").length
+							console.log("total line",  length_translate_text, length_ori_text)
+
+							await translatorPage.type(".min-h-0 > div:nth-child(1)", " ");
 						} 
 			
 						if (translatedText === "" || translatedText.includes("[...]")) {
 							console.log("Translation failed. Skipping chapter.");
 							// console.log("translatedText", translatedText);
 							// console.log("text", text);
+						}
+					}
+					else if(translator === "quilbot"){
+						const length_ori_text = text
+							.replace(/"""/g, '') // Remove triple quotes
+							.replace(/\n{2,}/g, "\n") // Replace 2 or more consecutive newlines with 1
+							.replace(/^\n+|\n+$/g, "") // Remove leading and trailing newlines
+							.split("\n")
+							.map((line) => line.trim())
+							.length // Remove empty lines
+						// Open DeepL in a new tab
+						await translatorPage.goto("https://quillbot.com/translate?sl=en-US&tl=id&tone=auto", {
+							waitUntil: "networkidle2",
+							timeout: 0,
+						});
+			
+						// Try to paste the text first, if it fails, fall back to typing
+						
+						text = await text.replaceAll('"', '||||');
+
+						try {
+							await translatorPage.evaluate((text) => {
+								const element = document.querySelector('[data-testid="tltr-input-editor"]');
+								if (element) {
+									element.textContent = text;
+								}
+							}, text);
+						} catch (error) {
+							console.log("Paste failed, falling back to typing:", error);
+							await translatorPage.type('[data-testid="tltr-input-editor"]', text);
+						}
+						await translatorPage.type('[data-testid="tltr-input-editor"]', " ");
+						// console.log("DONE TYPE")
+						await translatorPage.waitForSelector('[data-testid="tltr-translate-button"]');
+  					await translatorPage.click('[data-testid="tltr-translate-button"]');
+						// console.log("DONE CLICK BUTTON TRANSLATE")
+						await new Promise((resolve) => setTimeout(resolve, 1000));
+						await translatorPage.waitForSelector('[data-testid="tltr-translate-button"]:not([disabled])', {
+							timeout: 60000
+						});
+
+						await translatorPage.waitForSelector('[data-testid="tltr-copy-button"]');
+						await translatorPage.waitForSelector('#tltr-output');
+
+						let attempts = 0;
+						const maxAttempts = 15;
+						let firstWord = "";
+						while ((translatedText === "" || firstWord == "Chapter") && attempts <= maxAttempts) {
+							// Wait for 2 seconds before getting the translation
+							console.log(`Translation attempt ${attempts} times...`);
+							if(translatedText === ""){
+								console.log(`translatedText === ""`);
+								if(attempts == maxAttempts){
+									tranlateFailed = true;
+									tranlateFailedReason = 'translatedText === ""';
+								}
+							}
+							if(firstWord == "Chapter"){
+								console.log(`firstWord == "Chapter"`);
+								if(attempts == maxAttempts){
+									tranlateFailed = true;
+									tranlateFailedReason = 'firstWord === "Chapter"';
+								}
+							}
+							await new Promise((resolve) => setTimeout(resolve, 2000));
+			
+							translatedText = await translatorPage.evaluate(() => {
+								const textElement = document.querySelector('#tltr-output');
+
+								return textElement ? (textElement as HTMLElement).innerText?.trim() || "" : "";
+							});
+							translatedText = await translatedText.replaceAll('||||', '"');
+							firstWord = translatedText.substring(0, translatedText.indexOf(' '));
+			
+							attempts++;
 						}
 					}
 					else if(translator === "chatgpt"){
@@ -486,51 +596,64 @@ export default async function handler(
 						});
 					} else {
 						// Save to Supabase using the new schema
-						const { error } = await supabase.from("novel_chapter").insert([
-							{
-								novel: novelId,
-								chapter: chapterNumber,
-								title: chapterTitle,
-								text: cleanedTranslatedText,
-								url: saveUrl,
-							},
-						]);
-		
-						if (error) {
-							console.error("Error saving to Supabase:", error);
+						if(tranlateFailed){
+							console.error("translate Failed:", tranlateFailedReason);
 							results.push({
 								novelId: novel.id,
 								novelName: novel.name,
 								chaptersProcessed: chapterNumber,
-								error: error.message,
+								error: tranlateFailedReason,
 							});
-						} else {
-							console.log("Successfully saved chapter to Supabase");
-							results.push({
-								novelId: novel.id,
-								novelName: novel.name,
-								chaptersProcessed: chapterNumber,
-							});
-		
-							// Update the last_url_translated in the novel table
-							if(!currentUrl.includes("/null")){
-								const date = new Date();
-								const indonesiaTime = new Date(date.toLocaleString('en-US', { timeZone: 'Asia/Jakarta' }));
+						}
+						else {
+							const { error } = await supabase.from("novel_chapter").insert([
+								{
+									novel: novelId,
+									chapter: chapterNumber,
+									title: chapterTitle,
+									text: cleanedTranslatedText,
+									url: saveUrl,
+								},
+							]);
 
-								// Mengonversi ke ISO 8601 dengan mengurangi selisih waktu UTC+7
-								const utcDate = new Date(indonesiaTime.getTime() - (indonesiaTime.getTimezoneOffset() * 60000)).toISOString();
-
-
-								const { error: updateError } = await supabase.from("novel").update({ last_url_translated: saveUrl,updated_date: utcDate }).eq("id", novelId);
+							last_translate_text = cleanedTranslatedText;
 			
-								if (updateError) {
-									console.error("Error updating last_url_translated:", updateError);
+							if (error) {
+								console.error("Error saving to Supabase:", error);
+								results.push({
+									novelId: novel.id,
+									novelName: novel.name,
+									chaptersProcessed: chapterNumber,
+									error: error.message,
+								});
+							} else {
+								console.log("Successfully saved chapter to Supabase");
+								results.push({
+									novelId: novel.id,
+									novelName: novel.name,
+									chaptersProcessed: chapterNumber,
+								});
+			
+								// Update the last_url_translated in the novel table
+								if(!currentUrl.includes("/null")){
+									const date = new Date();
+									const indonesiaTime = new Date(date.toLocaleString('en-US', { timeZone: 'Asia/Jakarta' }));
+
+									// Mengonversi ke ISO 8601 dengan mengurangi selisih waktu UTC+7
+									const utcDate = new Date(indonesiaTime.getTime() - (indonesiaTime.getTimezoneOffset() * 60000)).toISOString();
+
+
+									const { error: updateError } = await supabase.from("novel").update({ last_url_translated: saveUrl,updated_date: utcDate }).eq("id", novelId);
+				
+									if (updateError) {
+										console.error("Error updating last_url_translated:", updateError);
+									}
 								}
-							}
-							else{
-								console.log("No more chapters to process");
-								console.log(currentUrl);
-								break;
+								else{
+									console.log("No more chapters to process");
+									console.log(currentUrl);
+									break;
+								}
 							}
 						}
 					}
