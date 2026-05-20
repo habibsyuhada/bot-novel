@@ -20,7 +20,7 @@ type BatchProcessResponse = {
 };
 
 const translator = "quilbot"; // deepl, siderai, chatgpt, quilbot
-const headless = true; // false munculin browser, true kagak
+const headless = false; // false munculin browser, true kagak
 const waiting = false; // nunggu 10jt detik
 
 type NovelRow = {
@@ -257,7 +257,7 @@ export default async function handler(
 		
 					// Find the next chapter link before closing the current page
 					const nextChapterUrl = await novelPage.evaluate(() => {
-						const nextButton = document.querySelector("#next_chap");
+						const nextButton = document.querySelector('a[data-chapter-nav="next"]');
 						return nextButton ? nextButton.getAttribute("href") : null;
 					});
 		
